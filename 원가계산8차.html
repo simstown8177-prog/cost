@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>메뉴 원가 계산기</title>
+
+<style>
+:root{
+--bg:#f5f6f8;--card:#fff;--line:#e9ebef;--text:#111;--sub:#6b7280;
+--brand:#10cfc9;--brand2:#0fbab5;--danger:#e11d48;
+--radius:16px;--shadow:0 8px 24px rgba(0,0,0,.06)
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
+.wrap{max-width:980px;margin:0 auto;padding:12px 12px 100px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(245,246,248,.9);backdrop-filter:blur(10px)}
+.titleRow{display:flex;align-items:center;gap:8px;padding:12px}
+.pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer}
+.pill.on{background:#111;color:#fff}
+.hint{font-size:12px;color:var(--sub);font-weight:800}
+
+.menuRow{display:flex;gap:10px;overflow-x:auto;padding:12px}
+.menuCard{min-width:200px;padding:14px;cursor:pointer}
+.menuCard.active{border:2px solid var(--brand2);background:#e6fffe}
+.menuName{font-weight:1000;font-size:16px}
+.menuMeta{margin-top:6px;font-size:13px;color:#374151;font-weight:800}
+
+.controls{display:flex;gap:8px;flex-wrap:wrap;padding:10px}
+input,select{border:1px solid var(--line);border-radius:12px;padding:10px;font-weight:700}
+.seg{display:flex;gap:6px}
+.seg button{border:1px solid var(--line);border-radius:999px;padding:10px 14px;font-weight:900;cursor:pointer;background:#fff}
+.seg .on{border:2px solid var(--brand2);background:#e6fffe}
+
+.sumGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px}
+.sumCard{padding:12px}
+.sumTitle{font-size:12px;color:var(--sub);font-weight:800}
+.sumVal{margin-top:6px;font-size:18px;font-weight:1000}
+.bad{color:var(--danger)}
+
+.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(245,246,248,.95);border-top:1px solid var(--line)}
+.bottomInner{max-width:980px;margin:0 auto;padding:10px;display:flex;align-items:center;gap:10px}
+.cta{margin-left:auto;background:var(--brand);border:0;border-radius:14px;padding:14px 16px;font-weight:1000;cursor:pointer}
+
+.sheetRow{display:grid;grid-template-columns:1fr 120px 120px 80px;gap:8px;margin-bottom:8px}
+</style>
+</head>
+
+<body>
+
+<div class="topbar card">
+  <div class="titleRow">
+    <div>
+      <div style="font-weight:1000">메뉴 원가 계산기</div>
+      <div class="hint">카드형 메뉴선택 · 자동 원가 · 마진율</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="pill on" id="btnMenu">메뉴선택</button>
+      <button class="pill" id="btnAdmin">관리자</button>
+    </div>
+  </div>
+</div>
+
+<!-- 메뉴선택 -->
+<div id="pageMenu">
+<div class="wrap">
+
+<div class="card">
+  <div style="padding:12px;font-weight:1000">메뉴 선택</div>
+  <div style="padding:0 12px 8px">
+    <input id="menuSearch" placeholder="메뉴 검색" style="width:100%">
+  </div>
+  <div class="menuRow" id="menuCards"></div>
+</div>
+
+<div class="card">
+  <div class="controls">
+    <div class="seg" id="sizeSeg"></div>
+    <input type="number" id="sellPrice" placeholder="판매가(수기)">
+  </div>
+
+  <div class="sumGrid">
+    <div class="sumCard card"><div class="sumTitle">기본원가</div><div class="sumVal" id="baseCost">-</div></div>
+    <div class="sumCard card"><div class="sumTitle">판매가</div><div class="sumVal" id="sellOut">-</div></div>
+    <div class="sumCard card"><div class="sumTitle">실마진</div><div class="sumVal" id="profit">-</div></div>
+    <div class="sumCard card"><div class="sumTitle">마진율</div><div class="sumVal" id="margin">-</div></div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- 관리자 -->
+<div id="pageAdmin" style="display:none">
+<div class="wrap">
+
+<div class="card">
+  <div style="padding:12px;font-weight:1000">재료 단가</div>
+  <div id="ingList" style="padding:12px"></div>
+  <button class="pill" onclick="addIng()">+ 재료 추가</button>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div style="padding:12px;font-weight:1000">메뉴 레시피</div>
+  <div id="recipeList" style="padding:12px"></div>
+  <button class="pill" onclick="addRecipe()">+ 메뉴 레시피 추가</button>
+</div>
+
+</div>
+</div>
+
+<div class="bottom">
+<div class="bottomInner">
+  <div class="hint">메뉴 카드 클릭 → 자동 원가 적용</div>
+  <button class="cta" id="ctaProfit">0원</button>
+</div>
+</div>
+
+<script>
+const LS=(k,v)=>v===undefined?JSON.parse(localStorage.getItem(k)||"null"):localStorage.setItem(k,JSON.stringify(v));
+let ING=LS("ING")||[];
+let REC=LS("REC")||[];
+let STATE=LS("STATE")||{menu:null,size:"M",price:0};
+
+function priceOf(n){const f=ING.find(i=>i.name===n);return f?+f.price:0}
+function menus(){
+ const m={};
+ REC.forEach(r=>{
+  if(!m[r.menu])m[r.menu]={};
+  m[r.menu][r.size]=r.items.reduce((s,i)=>s+i.qty*priceOf(i.ing),0);
+ });
+ return m;
+}
+
+function renderMenus(){
+ const wrap=document.getElementById("menuCards");
+ const kw=document.getElementById("menuSearch").value||"";
+ wrap.innerHTML="";
+ const m=menus();
+ Object.keys(m).filter(n=>n.includes(kw)).forEach(n=>{
+  const c=document.createElement("div");
+  c.className="card menuCard"+(STATE.menu===n?" active":"");
+  c.innerHTML=`<div class="menuName">${n}</div>
+               <div class="menuMeta">기본원가 ${(m[n][STATE.size]||0).toLocaleString()}원</div>`;
+  c.onclick=()=>{STATE.menu=n;LS("STATE",STATE);renderMenus();calc();};
+  wrap.appendChild(c);
+ });
+}
+
+function calc(){
+ const m=menus();
+ const cost=m[STATE.menu]?.[STATE.size]||0;
+ document.getElementById("baseCost").textContent=cost.toLocaleString()+"원";
+ document.getElementById("sellOut").textContent=STATE.price.toLocaleString()+"원";
+ const p=STATE.price-cost;
+ document.getElementById("profit").textContent=p.toLocaleString()+"원";
+ document.getElementById("margin").textContent=STATE.price?((p/STATE.price*100).toFixed(1)+"%"):"-";
+ document.getElementById("ctaProfit").textContent=p.toLocaleString()+"원";
+}
+
+["S","M","L"].forEach(s=>{
+ const b=document.createElement("button");
+ b.textContent=s;
+ if(STATE.size===s)b.classList.add("on");
+ b.onclick=()=>{STATE.size=s;LS("STATE",STATE);renderSizes();renderMenus();calc();}
+ document.getElementById("sizeSeg").appendChild(b);
+});
+function renderSizes(){
+ document.querySelectorAll("#sizeSeg button").forEach(b=>b.classList.toggle("on",b.textContent===STATE.size));
+}
+
+sellPrice.oninput=e=>{STATE.price=+e.target.value||0;LS("STATE",STATE);calc();}
+menuSearch.oninput=()=>renderMenus();
+
+function addIng(){ING.push({name:"",price:0});LS("ING",ING);renderAdmin();}
+function addRecipe(){REC.push({menu:"",size:"M",items:[]});LS("REC",REC);renderAdmin();}
+
+function renderAdmin(){
+ ingList.innerHTML="";
+ ING.forEach((i,x)=>{
+  const r=document.createElement("div");
+  r.className="sheetRow";
+  r.innerHTML=`<input value="${i.name}"><input type="number" value="${i.price}"><div></div><button>삭제</button>`;
+  r.children[0].oninput=e=>{ING[x].name=e.target.value;LS("ING",ING);renderMenus();};
+  r.children[1].oninput=e=>{ING[x].price=e.target.value;LS("ING",ING);renderMenus();};
+  r.children[3].onclick=()=>{ING.splice(x,1);LS("ING",ING);renderAdmin();renderMenus();};
+  ingList.appendChild(r);
+ });
+
+ recipeList.innerHTML="";
+ REC.forEach((r,x)=>{
+  const d=document.createElement("div");
+  d.className="card";d.style.padding="12px";d.style.marginBottom="8px";
+  d.innerHTML=`<input value="${r.menu}"><select><option>S</option><option>M</option><option>L</option></select>
+               <button>+재료</button><button>삭제</button>`;
+  d.children[0].oninput=e=>{REC[x].menu=e.target.value;LS("REC",REC);renderMenus();};
+  d.children[1].value=r.size;
+  d.children[1].onchange=e=>{REC[x].size=e.target.value;LS("REC",REC);renderMenus();};
+  d.children[2].onclick=()=>{r.items.push({ing:"",qty:0});LS("REC",REC);renderAdmin();};
+  d.children[3].onclick=()=>{REC.splice(x,1);LS("REC",REC);renderAdmin();renderMenus();};
+
+  r.items.forEach((it,y)=>{
+   const rr=document.createElement("div");
+   rr.className="sheetRow";
+   rr.innerHTML=`<input value="${it.ing}"><input type="number" value="${it.qty}">
+                 <div>${(it.qty*priceOf(it.ing)).toLocaleString()}원</div><button>삭제</button>`;
+   rr.children[0].oninput=e=>{it.ing=e.target.value;LS("REC",REC);renderMenus();renderAdmin();};
+   rr.children[1].oninput=e=>{it.qty=+e.target.value||0;LS("REC",REC);renderMenus();renderAdmin();};
+   rr.children[3].onclick=()=>{r.items.splice(y,1);LS("REC",REC);renderAdmin();renderMenus();};
+   d.appendChild(rr);
+  });
+  recipeList.appendChild(d);
+ });
+}
+
+btnMenu.onclick=()=>{pageMenu.style.display="block";pageAdmin.style.display="none";btnMenu.classList.add("on");btnAdmin.classList.remove("on");};
+btnAdmin.onclick=()=>{pageMenu.style.display="none";pageAdmin.style.display="block";btnAdmin.classList.add("on");btnMenu.classList.remove("on");};
+
+renderAdmin();renderMenus();renderSizes();calc();
+</script>
+</body>
+</html>
